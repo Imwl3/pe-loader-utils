@@ -12,6 +12,7 @@ typedef struct {
     PVOID BaseReloc;
     PVOID ImportDir;
     PVOID EntryPoint;
+    DWORD Status;  // Debug: track progress
 } MANUAL_MAP_DATA;
 
 typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
@@ -23,9 +24,13 @@ __attribute__((section(".map")))
 void __stdcall Loader(MANUAL_MAP_DATA *pData) {
     if (!pData) return;
 
+    pData->Status = 1;  // Started
+
     BYTE *pBase = (BYTE*)pData->ImageBase;
     IMAGE_NT_HEADERS *pNT = (IMAGE_NT_HEADERS*)pData->NtHeaders;
     IMAGE_OPTIONAL_HEADER *pOpt = &pNT->OptionalHeader;
+
+    pData->Status = 2;  // Parsed headers
 
     // Get kernel32 functions (PEB walk)
     PEB *pPEB;
@@ -35,9 +40,13 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
     pPEB = (PEB*)__readfsdword(0x30);
 #endif
 
+    pData->Status = 3;  // Got PEB
+
     LIST_ENTRY *pHead = &pPEB->Ldr->InMemoryOrderModuleList;
     LIST_ENTRY *pCurrent = pHead->Flink;
     HMODULE hKernel32 = NULL;
+
+    pData->Status = 4;  // Walking module list
 
     // Find kernel32.dll (not KERNELBASE!)
     while (pCurrent != pHead) {
@@ -56,7 +65,9 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
         pCurrent = pCurrent->Flink;
     }
 
-    if (!hKernel32) return;
+    if (!hKernel32) { pData->Status = 100; return; }  // Failed: no kernel32
+
+    pData->Status = 5;  // Found kernel32
 
     // Get exports from kernel32
     BYTE *pK32 = (BYTE*)hKernel32;
@@ -80,11 +91,14 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
             fnGetProcAddress = (pGetProcAddress)(pK32 + pFuncs[pOrds[i]]);
     }
 
-    if (!fnLoadLibraryA || !fnGetProcAddress) return;
+    if (!fnLoadLibraryA || !fnGetProcAddress) { pData->Status = 101; return; }  // Failed: no exports
+
+    pData->Status = 6;  // Found LoadLibraryA/GetProcAddress
 
     // Process relocations
     ULONGLONG delta = (ULONGLONG)(pBase - pOpt->ImageBase);
     if (delta && pData->BaseReloc) {
+        pData->Status = 7;  // Processing relocations
         IMAGE_BASE_RELOCATION *pReloc = (IMAGE_BASE_RELOCATION*)pData->BaseReloc;
         while (pReloc->VirtualAddress) {
             WORD *pEntry = (WORD*)(pReloc + 1);
@@ -99,12 +113,17 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
         }
     }
 
+    pData->Status = 8;  // Relocations done
+
     // Resolve imports
     if (pData->ImportDir) {
+        pData->Status = 9;  // Processing imports
         IMAGE_IMPORT_DESCRIPTOR *pImport = (IMAGE_IMPORT_DESCRIPTOR*)pData->ImportDir;
         while (pImport->Name) {
             char *modName = (char*)(pBase + pImport->Name);
             HMODULE hMod = fnLoadLibraryA(modName);
+
+            if (!hMod) { pData->Status = 102; return; }  // Failed: LoadLibrary
 
             ULONGLONG *pThunk = (ULONGLONG*)(pBase + pImport->OriginalFirstThunk);
             ULONGLONG *pIAT = (ULONGLONG*)(pBase + pImport->FirstThunk);
@@ -116,6 +135,7 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
                     IMAGE_IMPORT_BY_NAME *pName = (IMAGE_IMPORT_BY_NAME*)(pBase + *pThunk);
                     *pIAT = (ULONGLONG)fnGetProcAddress(hMod, pName->Name);
                 }
+                if (!*pIAT) { pData->Status = 103; return; }  // Failed: GetProcAddress
                 pThunk++;
                 pIAT++;
             }
@@ -123,15 +143,22 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
         }
     }
 
+    pData->Status = 10;  // Imports done
+
     // Call DllMain
     if (pData->EntryPoint) {
+        pData->Status = 11;  // Calling DllMain
         DllMain_t pEntry = (DllMain_t)pData->EntryPoint;
         pEntry((HINSTANCE)pBase, DLL_PROCESS_ATTACH, NULL);
     }
 
+    pData->Status = 12;  // DllMain returned
+
     // Wipe PE headers
     for (DWORD i = 0; i < pOpt->SizeOfHeaders; i++)
         pBase[i] = 0;
+
+    pData->Status = 99;  // SUCCESS!
 }
 
 void _start(void) {
@@ -237,9 +264,40 @@ void _start(void) {
     // Wait for loader to finish
     WaitForSingleObject(hThread, 5000);
 
+    // Read back status
+    MANUAL_MAP_DATA result = {0};
+    ReadProcessMemory(hProc, pRemoteData, &result, sizeof(result), NULL);
+
+    // Show status with MessageBox
+    char msg[256];
+    const char *statusMsg;
+    switch (result.Status) {
+        case 0:  statusMsg = "Never started"; break;
+        case 1:  statusMsg = "Started"; break;
+        case 2:  statusMsg = "Parsed headers"; break;
+        case 3:  statusMsg = "Got PEB"; break;
+        case 4:  statusMsg = "Walking modules"; break;
+        case 5:  statusMsg = "Found kernel32"; break;
+        case 6:  statusMsg = "Found exports"; break;
+        case 7:  statusMsg = "Processing relocs"; break;
+        case 8:  statusMsg = "Relocs done"; break;
+        case 9:  statusMsg = "Processing imports"; break;
+        case 10: statusMsg = "Imports done"; break;
+        case 11: statusMsg = "Calling DllMain"; break;
+        case 12: statusMsg = "DllMain returned"; break;
+        case 99: statusMsg = "SUCCESS!"; break;
+        case 100: statusMsg = "FAIL: kernel32 not found"; break;
+        case 101: statusMsg = "FAIL: exports not found"; break;
+        case 102: statusMsg = "FAIL: LoadLibrary"; break;
+        case 103: statusMsg = "FAIL: GetProcAddress"; break;
+        default: statusMsg = "Unknown"; break;
+    }
+    wsprintfA(msg, "Loader Status: %lu\n%s", result.Status, statusMsg);
+    MessageBoxA(NULL, msg, "Manual Mapper Debug", MB_OK);
+
     CloseHandle(hThread);
     CloseHandle(hProc);
     VirtualFree(pFile, 0, MEM_RELEASE);
 
-    ExitProcess(0);
+    ExitProcess(result.Status == 99 ? 0 : 1);
 }
