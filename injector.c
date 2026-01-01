@@ -93,15 +93,21 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
         char *name = (char*)(pK32 + pNames[i]);
         DWORD funcRVA = pFuncs[pOrds[i]];
 
-        // LoadLibraryA - simple pattern (L__dL__r)
-        if (name[0] == 'L' && name[4] == 'L' && name[7] == 'r')
+        // LoadLibraryA - check ends with 'yA' not 'yW' or 'xA'
+        if (name[0] == 'L' && name[4] == 'L' && name[7] == 'r' &&
+            name[10] == 'y' && name[11] == 'A' && name[12] == 0) {
             fnLoadLibraryA = (pLoadLibraryA)(pK32 + funcRVA);
-        // GetProcAddress - simple pattern (G__P___A)
-        if (name[0] == 'G' && name[3] == 'P' && name[7] == 'A')
+        }
+        // GetProcAddress - check ends with 'ss'
+        if (name[0] == 'G' && name[3] == 'P' && name[7] == 'A' &&
+            name[12] == 's' && name[13] == 's' && name[14] == 0) {
             fnGetProcAddress = (pGetProcAddress)(pK32 + funcRVA);
-        // GetLastError - simple pattern (G__L___E)
-        if (name[0] == 'G' && name[3] == 'L' && name[7] == 'E')
+        }
+        // GetLastError
+        if (name[0] == 'G' && name[3] == 'L' && name[7] == 'E' &&
+            name[10] == 'o' && name[11] == 'r' && name[12] == 0) {
             fnGetLastError = (pGetLastError)(pK32 + funcRVA);
+        }
     }
 
     if (!fnLoadLibraryA || !fnGetProcAddress) { pData->Status = 101; return; }  // Failed: no exports
