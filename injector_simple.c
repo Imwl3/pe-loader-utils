@@ -65,6 +65,16 @@ void _start(void) {
 
     ShowSuccess("DLL file exists");
 
+    // Try loading DLL locally first as a test
+    HMODULE hTest = LoadLibraryW(cmdLine);
+    if (!hTest) {
+        wsprintfA(dbg, "LOCAL LoadLibrary failed!\nError: %lu", GetLastError());
+        ShowError(dbg, GetLastError());
+        ExitProcess(15);
+    }
+    FreeLibrary(hTest);
+    ShowSuccess("LOCAL LoadLibrary OK - DLL is valid");
+
     // Open target process
     HANDLE hProc = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
     if (!hProc) {
