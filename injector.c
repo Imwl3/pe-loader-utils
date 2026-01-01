@@ -16,12 +16,13 @@ typedef struct {
     DWORD Status;           // 48
     DWORD DebugNameRVA;     // 52
     DWORD NumImports;       // 56
-    DWORD Padding;          // 60
+    DWORD LastError;        // 60
     char FailedModule[64];  // 64
 } MANUAL_MAP_DATA;
 
 typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
 typedef FARPROC (WINAPI *pGetProcAddress)(HMODULE, LPCSTR);
+typedef DWORD (WINAPI *pGetLastError)(void);
 typedef BOOL (WINAPI *DllMain_t)(HINSTANCE, DWORD, LPVOID);
 
 // Shellcode that runs in target process
@@ -87,15 +88,21 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
 
     pLoadLibraryA fnLoadLibraryA = NULL;
     pGetProcAddress fnGetProcAddress = NULL;
+    pGetLastError fnGetLastError = NULL;
 
     for (DWORD i = 0; i < pExp->NumberOfNames; i++) {
         char *name = (char*)(pK32 + pNames[i]);
+        DWORD funcRVA = pFuncs[pOrds[i]];
+
         // LoadLibraryA - must end with 'A' not 'W' or 'ExA'
         if (name[0] == 'L' && name[4] == 'L' && name[11] == 'y' && name[12] == 'A' && name[13] == '\0')
-            fnLoadLibraryA = (pLoadLibraryA)(pK32 + pFuncs[pOrds[i]]);
+            fnLoadLibraryA = (pLoadLibraryA)(pK32 + funcRVA);
         // GetProcAddress
         if (name[0] == 'G' && name[3] == 'P' && name[7] == 'A' && name[14] == '\0')
-            fnGetProcAddress = (pGetProcAddress)(pK32 + pFuncs[pOrds[i]]);
+            fnGetProcAddress = (pGetProcAddress)(pK32 + funcRVA);
+        // GetLastError
+        if (name[0] == 'G' && name[3] == 'L' && name[7] == 'E' && name[12] == '\0')
+            fnGetLastError = (pGetLastError)(pK32 + funcRVA);
     }
 
     if (!fnLoadLibraryA || !fnGetProcAddress) { pData->Status = 101; return; }  // Failed: no exports
@@ -132,6 +139,9 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
             HMODULE hMod = fnLoadLibraryA(modName);
 
             if (!hMod) {
+                // Capture error code
+                if (fnGetLastError)
+                    pData->LastError = fnGetLastError();
                 // Copy failed module name for debugging
                 for (int i = 0; i < 63 && modName[i]; i++)
                     pData->FailedModule[i] = modName[i];
@@ -370,7 +380,8 @@ void _start(void) {
         case 100: statusMsg = "FAIL: kernel32 not found"; break;
         case 101: statusMsg = "FAIL: exports not found"; break;
         case 102:
-            wsprintfA(msg, "FAIL: LoadLibrary\nName RVA: 0x%lX\nModule: [%s]", result.DebugNameRVA, result.FailedModule);
+            wsprintfA(msg, "FAIL: LoadLibrary\nName RVA: 0x%lX\nModule: [%s]\nGetLastError: %lu",
+                      result.DebugNameRVA, result.FailedModule, result.LastError);
             MessageBoxA(NULL, msg, "Manual Mapper - FAIL", MB_OK | MB_ICONERROR);
             CloseHandle(hThread);
             CloseHandle(hProc);
