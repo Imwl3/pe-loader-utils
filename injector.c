@@ -35,11 +35,13 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
     pPEB = (PEB*)__readfsdword(0x30);
 #endif
 
-    LDR_DATA_TABLE_ENTRY *pLdr = (LDR_DATA_TABLE_ENTRY*)((BYTE*)pPEB->Ldr->InMemoryOrderModuleList.Flink - sizeof(LIST_ENTRY));
+    LIST_ENTRY *pHead = &pPEB->Ldr->InMemoryOrderModuleList;
+    LIST_ENTRY *pCurrent = pHead->Flink;
     HMODULE hKernel32 = NULL;
 
     // Find kernel32.dll (not KERNELBASE!)
-    while (pLdr->DllBase) {
+    while (pCurrent != pHead) {
+        LDR_DATA_TABLE_ENTRY *pLdr = (LDR_DATA_TABLE_ENTRY*)((BYTE*)pCurrent - sizeof(LIST_ENTRY));
         if (pLdr->BaseDllName.Buffer) {
             WCHAR *name = pLdr->BaseDllName.Buffer;
             // Check for KERNEL32: 'k' 'e' ... '3' '2'
@@ -51,7 +53,7 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
                 break;
             }
         }
-        pLdr = (LDR_DATA_TABLE_ENTRY*)((BYTE*)pLdr->InMemoryOrderLinks.Flink - sizeof(LIST_ENTRY));
+        pCurrent = pCurrent->Flink;
     }
 
     if (!hKernel32) return;
