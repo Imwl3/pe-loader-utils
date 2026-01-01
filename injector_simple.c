@@ -51,6 +51,14 @@ void _start(void) {
         ExitProcess(10);
     }
 
+    // Convert to full path if relative
+    WCHAR fullPath[MAX_PATH];
+    if (!GetFullPathNameW(cmdLine, MAX_PATH, fullPath, NULL)) {
+        ShowError("GetFullPathNameW failed", GetLastError());
+        ExitProcess(16);
+    }
+    cmdLine = fullPath;
+
     // Show parsed values
     char dbg[512];
     wsprintfA(dbg, "PID: %lu\nPath: %S", pid, cmdLine);

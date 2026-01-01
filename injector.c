@@ -139,8 +139,14 @@ void _start(void) {
 
     LPWSTR cmdLine = GetCommandLineW();
 
-    // Skip exe name
-    while (*cmdLine && *cmdLine != ' ') cmdLine++;
+    // Skip exe name (handle quotes)
+    if (*cmdLine == '"') {
+        cmdLine++;
+        while (*cmdLine && *cmdLine != '"') cmdLine++;
+        if (*cmdLine == '"') cmdLine++;
+    } else {
+        while (*cmdLine && *cmdLine != ' ') cmdLine++;
+    }
     while (*cmdLine == ' ') cmdLine++;
 
     // Parse PID
@@ -151,13 +157,26 @@ void _start(void) {
     }
     while (*cmdLine == ' ') cmdLine++;
 
-    // cmdLine now points to DLL path (wide string)
+    // Strip quotes from path if present
+    if (*cmdLine == '"') {
+        cmdLine++;
+        LPWSTR end = cmdLine;
+        while (*end && *end != '"') end++;
+        *end = 0;
+    }
+
     if (!pid) {
         ExitProcess(1);
     }
 
+    // Convert to full path if relative
+    WCHAR fullPath[MAX_PATH];
+    if (!GetFullPathNameW(cmdLine, MAX_PATH, fullPath, NULL)) {
+        ExitProcess(2);
+    }
+
     // Read DLL file
-    HANDLE hFile = CreateFileW(cmdLine, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    HANDLE hFile = CreateFileW(fullPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (hFile == INVALID_HANDLE_VALUE) ExitProcess(2);
 
     DWORD fileSize = GetFileSize(hFile, NULL);
