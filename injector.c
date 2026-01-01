@@ -277,8 +277,8 @@ void _start(void) {
     WriteProcessMemory(hProc, pRemoteData, &mapData, sizeof(mapData), NULL);
 
     char dbg[512];
-    wsprintfA(dbg, "About to inject!\n\nImageBase: 0x%p\nImportDir: 0x%p\nBaseReloc: 0x%p\nEntry: 0x%p\n\nImport RVA: 0x%lX\nImport Size: 0x%lX",
-              pTarget, mapData.ImportDir, mapData.BaseReloc, mapData.EntryPoint,
+    wsprintfA(dbg, "PE Info:\n\nAddressOfEntryPoint RVA: 0x%lX\nTarget base: 0x%p\nCalculated Entry: 0x%p\n\nImport RVA: 0x%lX\nImport Size: 0x%lX",
+              pOpt->AddressOfEntryPoint, pTarget, mapData.EntryPoint,
               pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress,
               pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size);
     MessageBoxA(NULL, dbg, "Manual Mapper", MB_OK);
