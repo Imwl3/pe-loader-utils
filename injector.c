@@ -15,6 +15,8 @@ typedef struct {
     DWORD Status;  // Debug: track progress
     char FailedModule[64];  // Debug: which module failed
     DWORD DebugNameRVA;  // Debug: raw Name RVA from import descriptor
+    DWORD NumImports;  // Debug: how many imports resolved
+    ULONGLONG FirstIATValue;  // Debug: first resolved function address
 } MANUAL_MAP_DATA;
 
 typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
@@ -146,6 +148,13 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
                     *pIAT = (ULONGLONG)fnGetProcAddress(hMod, pName->Name);
                 }
                 if (!*pIAT) { pData->Status = 103; return; }  // Failed: GetProcAddress
+
+                // Debug: track first resolved address
+                if (pData->NumImports == 0) {
+                    pData->FirstIATValue = *pIAT;
+                }
+                pData->NumImports++;
+
                 pThunk++;
                 pIAT++;
             }
@@ -318,7 +327,13 @@ void _start(void) {
         case 10: statusMsg = "Imports done"; break;
         case 11: statusMsg = "Calling DllMain"; break;
         case 12: statusMsg = "DllMain returned"; break;
-        case 99: statusMsg = "SUCCESS!"; break;
+        case 99:
+            wsprintfA(msg, "SUCCESS!\n\nImports resolved: %lu\nFirst IAT: 0x%llX\nEntry: 0x%p",
+                      result.NumImports, result.FirstIATValue, result.EntryPoint);
+            MessageBoxA(NULL, msg, "Manual Mapper - SUCCESS", MB_OK);
+            CloseHandle(hThread);
+            CloseHandle(hProc);
+            ExitProcess(0);
         case 100: statusMsg = "FAIL: kernel32 not found"; break;
         case 101: statusMsg = "FAIL: exports not found"; break;
         case 102:
