@@ -38,33 +38,32 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
 
     pData->Status = 2;  // Parsed headers
 
-    // Get kernel32 functions (PEB walk)
-    PEB *pPEB;
-#ifdef _WIN64
-    pPEB = (PEB*)__readgsqword(0x60);
-#else
-    pPEB = (PEB*)__readfsdword(0x30);
-#endif
+    // Get kernel32 functions via PEB walk using RAW OFFSETS (Win10/11 x64)
+    // PEB offsets: Ldr at 0x18
+    // PEB_LDR_DATA offsets: InMemoryOrderModuleList at 0x20
+    // LDR_DATA_TABLE_ENTRY offsets: InMemoryOrderLinks at 0x10, DllBase at 0x30, BaseDllName.Buffer at 0x60
 
+    BYTE *pPEB = (BYTE*)__readgsqword(0x60);
     pData->Status = 3;  // Got PEB
 
-    LIST_ENTRY *pHead = &pPEB->Ldr->InMemoryOrderModuleList;
+    BYTE *pLdr = *(BYTE**)(pPEB + 0x18);  // PEB->Ldr
+    LIST_ENTRY *pHead = (LIST_ENTRY*)(pLdr + 0x20);  // Ldr->InMemoryOrderModuleList
     LIST_ENTRY *pCurrent = pHead->Flink;
     HMODULE hKernel32 = NULL;
 
     pData->Status = 4;  // Walking module list
 
-    // Find kernel32.dll (not KERNELBASE!)
+    // Find kernel32.dll
     while (pCurrent != pHead) {
-        LDR_DATA_TABLE_ENTRY *pLdr = (LDR_DATA_TABLE_ENTRY*)((BYTE*)pCurrent - sizeof(LIST_ENTRY));
-        if (pLdr->BaseDllName.Buffer) {
-            WCHAR *name = pLdr->BaseDllName.Buffer;
+        BYTE *pEntry = (BYTE*)pCurrent - 0x10;  // InMemoryOrderLinks is at offset 0x10
+        WCHAR *name = *(WCHAR**)(pEntry + 0x60);  // BaseDllName.Buffer at 0x60
+        if (name) {
             // Check for KERNEL32: 'k' 'e' ... '3' '2'
             if ((name[0] | 0x20) == 'k' &&
                 (name[1] | 0x20) == 'e' &&
                 name[6] == '3' &&
                 name[7] == '2') {
-                hKernel32 = (HMODULE)pLdr->DllBase;
+                hKernel32 = *(HMODULE*)(pEntry + 0x30);  // DllBase at 0x30
                 break;
             }
         }
