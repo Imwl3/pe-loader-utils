@@ -1,10 +1,11 @@
-// Minimal shellcode-style DLL - no CRT, no threads, no exceptions
-#include <windows.h>
+// Absolute minimum DLL - no imports at all
+typedef int BOOL;
+typedef void* HINSTANCE;
+typedef void* LPVOID;
+typedef unsigned long DWORD;
+#define TRUE 1
+#define DLL_PROCESS_ATTACH 1
 
-// Entry point - runs when DLL loads
-BOOL WINAPI _DllMainCRTStartup(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
-    if (fdwReason == DLL_PROCESS_ATTACH) {
-        MessageBoxA(NULL, "Injected!", "DLL", MB_OK);
-    }
+BOOL __stdcall _DllMainCRTStartup(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     return TRUE;
 }
