@@ -257,9 +257,16 @@ void _start(void) {
     MANUAL_MAP_DATA *pRemoteData = (MANUAL_MAP_DATA*)(pLoader + 0x800);
     WriteProcessMemory(hProc, pRemoteData, &mapData, sizeof(mapData), NULL);
 
+    char dbg[512];
+    wsprintfA(dbg, "About to inject!\n\nTarget: 0x%p\nLoader: 0x%p\nData: 0x%p\nEntry: 0x%p",
+              pTarget, pLoader, pRemoteData, mapData.EntryPoint);
+    MessageBoxA(NULL, dbg, "Manual Mapper", MB_OK);
+
     // Use CreateRemoteThread (simpler, more reliable)
     HANDLE hThread = CreateRemoteThread(hProc, NULL, 0, (LPTHREAD_START_ROUTINE)pLoader, pRemoteData, 0, NULL);
     if (!hThread) ExitProcess(5);
+
+    MessageBoxA(NULL, "Thread created! Waiting...", "Manual Mapper", MB_OK);
 
     // Wait for loader to finish (short timeout to catch crashes)
     DWORD waitResult = WaitForSingleObject(hThread, 3000);
