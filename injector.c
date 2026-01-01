@@ -38,12 +38,15 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
     LDR_DATA_TABLE_ENTRY *pLdr = (LDR_DATA_TABLE_ENTRY*)((BYTE*)pPEB->Ldr->InMemoryOrderModuleList.Flink - sizeof(LIST_ENTRY));
     HMODULE hKernel32 = NULL;
 
-    // Find kernel32.dll
+    // Find kernel32.dll (not KERNELBASE!)
     while (pLdr->DllBase) {
         if (pLdr->BaseDllName.Buffer) {
-            // Simple check for 'k' 'e' 'r' 'n' 'e' 'l'
             WCHAR *name = pLdr->BaseDllName.Buffer;
-            if ((name[0] | 0x20) == 'k' && (name[1] | 0x20) == 'e') {
+            // Check for KERNEL32: 'k' 'e' ... '3' '2'
+            if ((name[0] | 0x20) == 'k' &&
+                (name[1] | 0x20) == 'e' &&
+                name[6] == '3' &&
+                name[7] == '2') {
                 hKernel32 = (HMODULE)pLdr->DllBase;
                 break;
             }
