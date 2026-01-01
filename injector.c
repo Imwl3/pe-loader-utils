@@ -13,6 +13,7 @@ typedef struct {
     PVOID ImportDir;
     PVOID EntryPoint;
     DWORD Status;  // Debug: track progress
+    char FailedModule[64];  // Debug: which module failed
 } MANUAL_MAP_DATA;
 
 typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
@@ -123,7 +124,13 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
             char *modName = (char*)(pBase + pImport->Name);
             HMODULE hMod = fnLoadLibraryA(modName);
 
-            if (!hMod) { pData->Status = 102; return; }  // Failed: LoadLibrary
+            if (!hMod) {
+                // Copy failed module name for debugging
+                for (int i = 0; i < 63 && modName[i]; i++)
+                    pData->FailedModule[i] = modName[i];
+                pData->Status = 102;
+                return;
+            }
 
             ULONGLONG *pThunk = (ULONGLONG*)(pBase + pImport->OriginalFirstThunk);
             ULONGLONG *pIAT = (ULONGLONG*)(pBase + pImport->FirstThunk);
@@ -309,7 +316,12 @@ void _start(void) {
         case 99: statusMsg = "SUCCESS!"; break;
         case 100: statusMsg = "FAIL: kernel32 not found"; break;
         case 101: statusMsg = "FAIL: exports not found"; break;
-        case 102: statusMsg = "FAIL: LoadLibrary"; break;
+        case 102:
+            wsprintfA(msg, "FAIL: LoadLibrary\nModule: %s", result.FailedModule);
+            MessageBoxA(NULL, msg, "Manual Mapper - FAIL", MB_OK | MB_ICONERROR);
+            CloseHandle(hThread);
+            CloseHandle(hProc);
+            ExitProcess(102);
         case 103: statusMsg = "FAIL: GetProcAddress"; break;
         default: statusMsg = "Unknown"; break;
     }
