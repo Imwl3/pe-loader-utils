@@ -31,8 +31,8 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
     pData->Status = 1;  // Started
 
     BYTE *pBase = (BYTE*)pData->ImageBase;
-    IMAGE_NT_HEADERS *pNT = (IMAGE_NT_HEADERS*)pData->NtHeaders;
-    IMAGE_OPTIONAL_HEADER *pOpt = &pNT->OptionalHeader;
+    IMAGE_NT_HEADERS64 *pNT = (IMAGE_NT_HEADERS64*)pData->NtHeaders;
+    IMAGE_OPTIONAL_HEADER64 *pOpt = &pNT->OptionalHeader;
 
     pData->Status = 2;  // Parsed headers
 
@@ -75,8 +75,8 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
 
     // Get exports from kernel32
     BYTE *pK32 = (BYTE*)hKernel32;
-    IMAGE_DOS_HEADER *pDos = (IMAGE_DOS_HEADER*)pK32;
-    IMAGE_NT_HEADERS *pNtK = (IMAGE_NT_HEADERS*)(pK32 + pDos->e_lfanew);
+    IMAGE_DOS_HEADER *pDosK = (IMAGE_DOS_HEADER*)pK32;
+    IMAGE_NT_HEADERS64 *pNtK = (IMAGE_NT_HEADERS64*)(pK32 + pDosK->e_lfanew);
     IMAGE_EXPORT_DIRECTORY *pExp = (IMAGE_EXPORT_DIRECTORY*)(pK32 +
         pNtK->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress);
 
@@ -231,10 +231,10 @@ void _start(void) {
     ReadFile(hFile, pFile, fileSize, &bytesRead, NULL);
     CloseHandle(hFile);
 
-    // Parse PE
+    // Parse PE (use explicit 64-bit structures)
     IMAGE_DOS_HEADER *pDos = (IMAGE_DOS_HEADER*)pFile;
-    IMAGE_NT_HEADERS *pNT = (IMAGE_NT_HEADERS*)(pFile + pDos->e_lfanew);
-    IMAGE_OPTIONAL_HEADER *pOpt = &pNT->OptionalHeader;
+    IMAGE_NT_HEADERS64 *pNT = (IMAGE_NT_HEADERS64*)(pFile + pDos->e_lfanew);
+    IMAGE_OPTIONAL_HEADER64 *pOpt = &pNT->OptionalHeader;
     IMAGE_SECTION_HEADER *pSec = IMAGE_FIRST_SECTION(pNT);
 
     // Open target process
