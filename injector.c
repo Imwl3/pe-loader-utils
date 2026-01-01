@@ -90,9 +90,11 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
 
     for (DWORD i = 0; i < pExp->NumberOfNames; i++) {
         char *name = (char*)(pK32 + pNames[i]);
-        if (name[0] == 'L' && name[4] == 'L' && name[7] == 'r') // LoadLibraryA
+        // LoadLibraryA - must end with 'A' not 'W' or 'ExA'
+        if (name[0] == 'L' && name[4] == 'L' && name[11] == 'y' && name[12] == 'A' && name[13] == '\0')
             fnLoadLibraryA = (pLoadLibraryA)(pK32 + pFuncs[pOrds[i]]);
-        if (name[0] == 'G' && name[3] == 'P' && name[7] == 'A') // GetProcAddress
+        // GetProcAddress
+        if (name[0] == 'G' && name[3] == 'P' && name[7] == 'A' && name[14] == '\0')
             fnGetProcAddress = (pGetProcAddress)(pK32 + pFuncs[pOrds[i]]);
     }
 
