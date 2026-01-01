@@ -7,16 +7,17 @@
 // Maps DLL sections, fixes relocations, resolves imports, calls entry
 
 typedef struct {
-    PVOID ImageBase;
-    PVOID NtHeaders;
-    PVOID BaseReloc;
-    PVOID ImportDir;
-    PVOID EntryPoint;
-    DWORD Status;  // Debug: track progress
-    char FailedModule[64];  // Debug: which module failed
-    DWORD DebugNameRVA;  // Debug: raw Name RVA from import descriptor
-    DWORD NumImports;  // Debug: how many imports resolved
-    ULONGLONG FirstIATValue;  // Debug: first resolved function address
+    PVOID ImageBase;        // 0
+    PVOID NtHeaders;        // 8
+    PVOID BaseReloc;        // 16
+    PVOID ImportDir;        // 24
+    PVOID EntryPoint;       // 32
+    ULONGLONG FirstIATValue;// 40 (8-byte aligned)
+    DWORD Status;           // 48
+    DWORD DebugNameRVA;     // 52
+    DWORD NumImports;       // 56
+    DWORD Padding;          // 60
+    char FailedModule[64];  // 64
 } MANUAL_MAP_DATA;
 
 typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
