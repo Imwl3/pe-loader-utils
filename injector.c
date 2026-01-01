@@ -265,8 +265,14 @@ void _start(void) {
         mapData.BaseReloc = pTarget + pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress;
     if (pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size)
         mapData.ImportDir = pTarget + pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
-    if (pOpt->AddressOfEntryPoint)
-        mapData.EntryPoint = pTarget + pOpt->AddressOfEntryPoint;
+
+    // Always set entry point (don't check for 0, it's valid RVA)
+    mapData.EntryPoint = pTarget + pOpt->AddressOfEntryPoint;
+
+    char dbg2[256];
+    wsprintfA(dbg2, "Entry calc:\npTarget: 0x%p\nRVA: 0x%lX\nResult: 0x%p",
+              pTarget, pOpt->AddressOfEntryPoint, mapData.EntryPoint);
+    MessageBoxA(NULL, dbg2, "Debug", MB_OK);
 
     // Write loader shellcode
     BYTE *pLoader = (BYTE*)VirtualAllocEx(hProc, NULL, 0x1000, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
