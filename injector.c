@@ -261,12 +261,26 @@ void _start(void) {
     HANDLE hThread = CreateRemoteThread(hProc, NULL, 0, (LPTHREAD_START_ROUTINE)pLoader, pRemoteData, 0, NULL);
     if (!hThread) ExitProcess(5);
 
-    // Wait for loader to finish
-    WaitForSingleObject(hThread, 5000);
+    // Wait for loader to finish (short timeout to catch crashes)
+    DWORD waitResult = WaitForSingleObject(hThread, 3000);
 
-    // Read back status
+    // Check if process is still alive
+    DWORD procExitCode = 0;
+    GetExitCodeProcess(hProc, &procExitCode);
+
+    // Read back status (might fail if process crashed)
     MANUAL_MAP_DATA result = {0};
-    ReadProcessMemory(hProc, pRemoteData, &result, sizeof(result), NULL);
+    BOOL readOk = ReadProcessMemory(hProc, pRemoteData, &result, sizeof(result), NULL);
+
+    if (procExitCode != STILL_ACTIVE) {
+        char msg[256];
+        wsprintfA(msg, "TARGET CRASHED!\n\nLast status before crash: %lu\nRead success: %d",
+                  result.Status, readOk);
+        MessageBoxA(NULL, msg, "Manual Mapper - CRASH", MB_OK | MB_ICONERROR);
+        CloseHandle(hThread);
+        CloseHandle(hProc);
+        ExitProcess(50);
+    }
 
     // Show status with MessageBox
     char msg[256];
