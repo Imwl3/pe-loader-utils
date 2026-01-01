@@ -1,16 +1,18 @@
-// NO IMPORTS version - test if manual mapper works at all
-typedef int BOOL;
-typedef void* HINSTANCE;
-typedef void* LPVOID;
-typedef unsigned long DWORD;
-#define TRUE 1
-#define DLL_PROCESS_ATTACH 1
+#include <windows.h>
 
-__declspec(dllexport) volatile int g_injected = 0;
-
-BOOL __stdcall _DllMainCRTStartup(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
+BOOL WINAPI _DllMainCRTStartup(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     if (fdwReason == DLL_PROCESS_ATTACH) {
-        g_injected = 0xDEADBEEF;  // Proof we ran
+        // Simple test - create file in temp
+        char path[MAX_PATH];
+        GetTempPathA(MAX_PATH, path);
+        lstrcatA(path, "INJECTED.txt");
+        HANDLE hFile = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+        if (hFile != INVALID_HANDLE_VALUE) {
+            char msg[] = "Manual mapped!\r\n";
+            DWORD written;
+            WriteFile(hFile, msg, sizeof(msg)-1, &written, NULL);
+            CloseHandle(hFile);
+        }
     }
     return TRUE;
 }

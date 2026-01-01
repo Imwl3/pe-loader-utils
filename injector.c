@@ -14,6 +14,7 @@ typedef struct {
     PVOID EntryPoint;
     DWORD Status;  // Debug: track progress
     char FailedModule[64];  // Debug: which module failed
+    DWORD DebugNameRVA;  // Debug: raw Name RVA from import descriptor
 } MANUAL_MAP_DATA;
 
 typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
@@ -121,6 +122,7 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
         pData->Status = 9;  // Processing imports
         IMAGE_IMPORT_DESCRIPTOR *pImport = (IMAGE_IMPORT_DESCRIPTOR*)pData->ImportDir;
         while (pImport->Name) {
+            pData->DebugNameRVA = pImport->Name;  // Save for debugging
             char *modName = (char*)(pBase + pImport->Name);
             HMODULE hMod = fnLoadLibraryA(modName);
 
@@ -128,6 +130,7 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
                 // Copy failed module name for debugging
                 for (int i = 0; i < 63 && modName[i]; i++)
                     pData->FailedModule[i] = modName[i];
+                pData->FailedModule[63] = 0;
                 pData->Status = 102;
                 return;
             }
@@ -319,7 +322,7 @@ void _start(void) {
         case 100: statusMsg = "FAIL: kernel32 not found"; break;
         case 101: statusMsg = "FAIL: exports not found"; break;
         case 102:
-            wsprintfA(msg, "FAIL: LoadLibrary\nModule: %s", result.FailedModule);
+            wsprintfA(msg, "FAIL: LoadLibrary\nName RVA: 0x%lX\nModule: [%s]", result.DebugNameRVA, result.FailedModule);
             MessageBoxA(NULL, msg, "Manual Mapper - FAIL", MB_OK | MB_ICONERROR);
             CloseHandle(hThread);
             CloseHandle(hProc);
