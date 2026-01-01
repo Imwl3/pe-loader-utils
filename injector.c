@@ -94,14 +94,14 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
         char *name = (char*)(pK32 + pNames[i]);
         DWORD funcRVA = pFuncs[pOrds[i]];
 
-        // LoadLibraryA - must end with 'A' not 'W' or 'ExA'
-        if (name[0] == 'L' && name[4] == 'L' && name[11] == 'y' && name[12] == 'A' && name[13] == '\0')
+        // LoadLibraryA (12 chars): L[0]o[1]a[2]d[3]L[4]i[5]b[6]r[7]a[8]r[9]y[10]A[11]\0[12]
+        if (name[0] == 'L' && name[4] == 'L' && name[10] == 'y' && name[11] == 'A' && name[12] == '\0')
             fnLoadLibraryA = (pLoadLibraryA)(pK32 + funcRVA);
-        // GetProcAddress
-        if (name[0] == 'G' && name[3] == 'P' && name[7] == 'A' && name[14] == '\0')
+        // GetProcAddress (14 chars): G[0]e[1]t[2]P[3]r[4]o[5]c[6]A[7]d[8]d[9]r[10]e[11]s[12]s[13]\0[14]
+        if (name[0] == 'G' && name[3] == 'P' && name[7] == 'A' && name[13] == 's' && name[14] == '\0')
             fnGetProcAddress = (pGetProcAddress)(pK32 + funcRVA);
-        // GetLastError
-        if (name[0] == 'G' && name[3] == 'L' && name[7] == 'E' && name[12] == '\0')
+        // GetLastError (12 chars): G[0]e[1]t[2]L[3]a[4]s[5]t[6]E[7]r[8]r[9]o[10]r[11]\0[12]
+        if (name[0] == 'G' && name[3] == 'L' && name[7] == 'E' && name[11] == 'r' && name[12] == '\0')
             fnGetLastError = (pGetLastError)(pK32 + funcRVA);
     }
 
