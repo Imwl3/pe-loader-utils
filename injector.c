@@ -257,6 +257,30 @@ void _start(void) {
         }
     }
 
+    // Debug: dump raw PE header bytes
+    char rawDbg[512];
+    BYTE *optBase = (BYTE*)pOpt;
+    wsprintfA(rawDbg,
+        "RAW PE PARSE:\n"
+        "pFile: 0x%p\n"
+        "e_lfanew: 0x%lX\n"
+        "pNT: 0x%p\n"
+        "pOpt: 0x%p\n"
+        "Magic: 0x%X (expect 0x20b)\n"
+        "\n"
+        "Bytes at pOpt+16 (EntryRVA):\n"
+        "%02X %02X %02X %02X\n"
+        "\n"
+        "Bytes at pOpt+112+8 (ImportDir):\n"
+        "%02X %02X %02X %02X (RVA)\n"
+        "%02X %02X %02X %02X (Size)",
+        pFile, pDos->e_lfanew, pNT, pOpt,
+        pOpt->Magic,
+        optBase[16], optBase[17], optBase[18], optBase[19],
+        optBase[120], optBase[121], optBase[122], optBase[123],
+        optBase[124], optBase[125], optBase[126], optBase[127]);
+    MessageBoxA(NULL, rawDbg, "RAW PE DEBUG", MB_OK);
+
     // Setup loader data
     MANUAL_MAP_DATA mapData = {0};
     mapData.ImageBase = pTarget;
