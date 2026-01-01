@@ -265,8 +265,10 @@ void _start(void) {
     WriteProcessMemory(hProc, pRemoteData, &mapData, sizeof(mapData), NULL);
 
     char dbg[512];
-    wsprintfA(dbg, "About to inject!\n\nTarget: 0x%p\nLoader: 0x%p\nData: 0x%p\nEntry: 0x%p",
-              pTarget, pLoader, pRemoteData, mapData.EntryPoint);
+    wsprintfA(dbg, "About to inject!\n\nImageBase: 0x%p\nImportDir: 0x%p\nBaseReloc: 0x%p\nEntry: 0x%p\n\nImport RVA: 0x%lX\nImport Size: 0x%lX",
+              pTarget, mapData.ImportDir, mapData.BaseReloc, mapData.EntryPoint,
+              pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress,
+              pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size);
     MessageBoxA(NULL, dbg, "Manual Mapper", MB_OK);
 
     // Use CreateRemoteThread (simpler, more reliable)
