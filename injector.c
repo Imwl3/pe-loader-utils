@@ -21,6 +21,7 @@ typedef struct {
 } MANUAL_MAP_DATA;
 
 typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
+typedef HMODULE (WINAPI *pGetModuleHandleA)(LPCSTR);
 typedef FARPROC (WINAPI *pGetProcAddress)(HMODULE, LPCSTR);
 typedef DWORD (WINAPI *pGetLastError)(void);
 typedef BOOL (WINAPI *DllMain_t)(HINSTANCE, DWORD, LPVOID);
@@ -86,6 +87,7 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
     DWORD *pFuncs = (DWORD*)(pK32 + pExp->AddressOfFunctions);
 
     pLoadLibraryA fnLoadLibraryA = NULL;
+    pGetModuleHandleA fnGetModuleHandleA = NULL;
     pGetProcAddress fnGetProcAddress = NULL;
     pGetLastError fnGetLastError = NULL;
 
@@ -93,24 +95,30 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
         char *name = (char*)(pK32 + pNames[i]);
         DWORD funcRVA = pFuncs[pOrds[i]];
 
-        // LoadLibraryA - check ends with 'yA' not 'yW' or 'xA'
+        // LoadLibraryA - L___L__r__yA\0
         if (name[0] == 'L' && name[4] == 'L' && name[7] == 'r' &&
             name[10] == 'y' && name[11] == 'A' && name[12] == 0) {
             fnLoadLibraryA = (pLoadLibraryA)(pK32 + funcRVA);
         }
-        // GetProcAddress - check ends with 'ss'
+        // GetModuleHandleA - G__M_____H____A\0 (16 chars)
+        if (name[0] == 'G' && name[3] == 'M' && name[9] == 'H' &&
+            name[15] == 'A' && name[16] == 0) {
+            fnGetModuleHandleA = (pGetModuleHandleA)(pK32 + funcRVA);
+        }
+        // GetProcAddress - G__P___A____ss\0
         if (name[0] == 'G' && name[3] == 'P' && name[7] == 'A' &&
             name[12] == 's' && name[13] == 's' && name[14] == 0) {
             fnGetProcAddress = (pGetProcAddress)(pK32 + funcRVA);
         }
-        // GetLastError
+        // GetLastError - G__L___E___r\0
         if (name[0] == 'G' && name[3] == 'L' && name[7] == 'E' &&
             name[10] == 'o' && name[11] == 'r' && name[12] == 0) {
             fnGetLastError = (pGetLastError)(pK32 + funcRVA);
         }
     }
 
-    if (!fnLoadLibraryA || !fnGetProcAddress) { pData->Status = 101; return; }  // Failed: no exports
+    if (!fnGetProcAddress) { pData->Status = 101; return; }  // Failed: no exports
+    if (!fnLoadLibraryA && !fnGetModuleHandleA) { pData->Status = 101; return; }
 
     pData->Status = 6;  // Found LoadLibraryA/GetProcAddress
 
@@ -141,7 +149,16 @@ void __stdcall Loader(MANUAL_MAP_DATA *pData) {
         while (pImport->Name) {
             pData->DebugNameRVA = pImport->Name;  // Save for debugging
             char *modName = (char*)(pBase + pImport->Name);
-            HMODULE hMod = fnLoadLibraryA(modName);
+
+            // Try GetModuleHandleA first (for already-loaded DLLs)
+            HMODULE hMod = NULL;
+            if (fnGetModuleHandleA) {
+                hMod = fnGetModuleHandleA(modName);
+            }
+            // Fall back to LoadLibraryA if not already loaded
+            if (!hMod && fnLoadLibraryA) {
+                hMod = fnLoadLibraryA(modName);
+            }
 
             if (!hMod) {
                 // Capture error code
